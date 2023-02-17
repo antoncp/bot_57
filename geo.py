@@ -14,12 +14,11 @@ def check_city(city):
     geo_location = geolocator.geocode(city)
     if geo_location is None:
         return (False, False, False, False)
-    else:
-        latitude = geo_location.latitude
-        longitude = geo_location.longitude
-        country, place, timezone = find_location(latitude, longitude)
-        utc_offset = time_offset(timezone)
-        return country, place, timezone, utc_offset
+    latitude = geo_location.latitude
+    longitude = geo_location.longitude
+    country, place, timezone = find_location(latitude, longitude)
+    utc_offset = time_offset(timezone)
+    return country, place, timezone, utc_offset
 
 
 def coordinates_to_city(latitude, longitude):
