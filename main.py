@@ -144,11 +144,11 @@ def get_all_timezones(message):
               f'(Гринвич), {moscow_shift:.1f} час. - относительно Москвы.\n'
               '*Часовой пояс* *|*     *Кол-во человек*\n'
               '----------------------------------------\n')
-    list = 'Пока никого нет'
+    timezone_stats = 'Пока никого нет'
     if time:
-        list = '\n'.join([f'*{zone}* _(UTC +{utc} ч.)_: `{people}`'
-                         for zone, utc, people in time])
-    answer = header + list
+        timezone_stats = '\n'.join([f'*{zone}* _(UTC +{utc} ч.)_: `{people}`'
+                                    for zone, utc, people in time])
+    answer = header + timezone_stats
     bot.send_message(message.chat.id,
                      answer,
                      parse_mode='Markdown')
