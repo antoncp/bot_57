@@ -28,8 +28,7 @@ bot.set_my_commands([
 # Реакции на глобальные команды бота
 @bot.message_handler(commands=['start', 'help'])
 def start(message):
-    """Выводит стартовое сообщение бота.
-    """
+    """Выводит стартовое сообщение бота."""
     bot.send_message(
         message.chat.id,
         REMARKS['intro'],
@@ -38,8 +37,7 @@ def start(message):
 
 @bot.message_handler(commands=['new'])
 def new(message):
-    """Запускает процесс регистрации нового пользователя.
-    """
+    """Запускает процесс регистрации нового пользователя."""
     user = activate_user(message.chat.id)
     if user.record:
         bot.send_document(
@@ -97,8 +95,7 @@ def message(message):
 
 @bot.message_handler(commands=['locations'])
 def get_all_locations(message):
-    """Выводит географию всех зарегистрированных пользователей бота.
-    """
+    """Выводит географию всех зарегистрированных пользователей бота."""
     db = DataBase(message.chat.id)
     ru = db.get_locations_ru()
     ino = db.get_locations_ino()
@@ -134,8 +131,7 @@ def get_all_locations(message):
 
 @bot.message_handler(commands=['timezones'])
 def get_all_timezones(message):
-    """Выводит часовые пояса всех зарегистрированных пользователей бота.
-    """
+    """Выводит часовые пояса всех зарегистрированных пользователей бота."""
     db = DataBase(message.chat.id)
     time = db.get_timezones()
     db.close()
@@ -160,8 +156,7 @@ def get_all_timezones(message):
 
 @bot.message_handler(content_types=['location'])
 def location(message):
-    """Обрабатывает геолокацию пользователя в случае отправки.
-    """
+    """Обрабатывает геолокацию пользователя в случае отправки."""
     if not message.location:
         return
     user = activate_user(message.chat.id)
@@ -181,8 +176,7 @@ def location(message):
 # Реакции на срабатывание инлайн-клавиатур бота
 @bot.callback_query_handler(func=lambda call: call.data == 'name')
 def provide_name(call):
-    """Обрабатывает заполнение имени пользователя.
-    """
+    """Обрабатывает заполнение имени пользователя."""
     message = 'Впишите свое имя в поле ответа.'
     reply = ForceReply(input_field_placeholder='Меня зовут...')
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -191,8 +185,7 @@ def provide_name(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'geo')
 def provide_geo(call):
-    """Обрабатывает заполнение города пользователя.
-    """
+    """Обрабатывает заполнение города пользователя."""
     message = 'Впишите свой город в поле для ответа.'
     reply = ForceReply(input_field_placeholder='Мой город...')
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -201,8 +194,7 @@ def provide_geo(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'location')
 def provide_location(call):
-    """Формирует кнопку отправки геолокации.
-    """
+    """Формирует кнопку отправки геолокации."""
     message = REMARKS['location']
     keyboard = ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     button_geo = KeyboardButton(text="Отправить местоположение",
@@ -217,8 +209,7 @@ def provide_location(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'delete')
 def delete(call):
-    """Обрабатывает отмену сохранения информации в БД.
-    """
+    """Обрабатывает отмену сохранения информации в БД."""
     message = 'Операция не завершена. Попробуйте снова.'
     bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_message(call.message.chat.id, message)
@@ -226,8 +217,7 @@ def delete(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'save')
 def save_user(call):
-    """Обрабатывает сохранение информации о пользователе в БД.
-    """
+    """Обрабатывает сохранение информации о пользователе в БД."""
     user = activate_user(call.message.chat.id)
     if user.save_user():
         bot.send_document(
@@ -243,8 +233,7 @@ def save_user(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'callall')
 def call_all(call):
-    """Обрабатывает отправку сообщения всем землякам.
-    """
+    """Обрабатывает отправку сообщения всем землякам."""
     message = 'Впишите свое сообщение. Его увидят все ваши земляки в чате.'
     reply = ForceReply(input_field_placeholder='Сообщение...')
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -253,8 +242,7 @@ def call_all(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'answerall')
 def answer_all(call):
-    """Обрабатывает ответ на сообщение земляка.
-    """
+    """Обрабатывает ответ на сообщение земляка."""
     message = 'Впишите свое сообщение. Его увидят все ваши земляки в чате.'
     reply = ForceReply(input_field_placeholder='Сообщение...')
     bot.send_message(call.message.chat.id, message, reply_markup=reply)
@@ -263,8 +251,7 @@ def answer_all(call):
 
 # Вынесенные функции бота
 def submit_user(message):
-    """Подтверждает первичное сохранение информации о пользователе в БД.
-    """
+    """Подтверждает первичное сохранение информации о пользователе в БД."""
     user = activate_user(message.chat.id)
     save_user = InlineKeyboardMarkup()
     save_user.add(InlineKeyboardButton(
@@ -282,8 +269,7 @@ def submit_user(message):
 
 
 def send_all(message):
-    """Отправляет сообщение всем землякам пользователя.
-    """
+    """Отправляет сообщение всем землякам пользователя."""
     user = activate_user(message.chat.id)
     locals = user.get_locals()
     if not locals:
@@ -314,8 +300,7 @@ def send_all(message):
 
 
 def alert_all(user):
-    """Информирует о появлении нового земляка.
-    """
+    """Информирует о появлении нового земляка."""
     locals = user.get_locals()
     if not locals:
         return

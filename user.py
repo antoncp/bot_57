@@ -8,6 +8,7 @@ class User:
     хранить данные с идентификаторами земляков пользователя, а также флаг
     о том, что данные пользователя, записаны в БД.
     """
+
     list_of_users = set()
     map_url = None
     num_of_users = 0
@@ -31,8 +32,7 @@ class User:
         return str(self.id)
 
     def load_from_db(self):
-        """Загружает информацию о сохраненном пользователе из БД.
-        """
+        """Загружает информацию о сохраненном пользователе из БД."""
         db = DataBase(self.id)
         (self.name, self.city, self.country,
          self.timezone, self.utc_offset) = db.load_user()
@@ -40,8 +40,7 @@ class User:
         db.close()
 
     def save_user(self):
-        """Сохраняет информацию о пользователе в БД.
-        """
+        """Сохраняет информацию о пользователе в БД."""
         db = DataBase(self.id)
         if not db.check_user_exist() and self.timezone:
             db.create_user(self.name, self.city,
