@@ -48,17 +48,18 @@ def new(message):
              'ZwADniIAAueiUUsNLalUHu6Nly4E'),
             caption=f'{user.name} из {user.city}, {user.country}, вы уже есть'
                     ' в базе. Данные нельзя поменять.')
-    else:
-        provide_name = InlineKeyboardMarkup()
-        provide_name.add(InlineKeyboardButton(
-                                text='Указать свое имя',
-                                callback_data='name'))
-        bot.send_message(
-            message.chat.id,
-            REMARKS['name'],
-            reply_markup=provide_name,
-            parse_mode='Markdown'
-            )
+        return
+
+    provide_name = InlineKeyboardMarkup()
+    provide_name.add(
+        InlineKeyboardButton(text='Указать свое имя', callback_data='name')
+    )
+    bot.send_message(
+        message.chat.id,
+        REMARKS['name'],
+        reply_markup=provide_name,
+        parse_mode='Markdown'
+        )
 
 
 @bot.message_handler(commands=['message'])
@@ -70,26 +71,28 @@ def message(message):
     if not user.record:
         answer = 'Сначала укажите ваш город. Город не определен.'
         bot.send_message(message.chat.id, answer)
+        return
+
+    locals = user.get_locals()
+    if not locals:
+        answer = (f'{user.name}, в вашем городе пока зарегистрированы '
+                  'только вы. Ждем пополнения.')
+        bot.send_message(message.chat.id, answer)
+        return
+
+    num = len(locals)
+    if user.country == 'Россия':
+        answer = REMARKS['locals'].format(user.city, num)
     else:
-        locals = user.get_locals()
-        if locals:
-            num = len(locals)
-            if user.country == 'Россия':
-                answer = REMARKS['locals'].format(user.city, num)
-            else:
-                answer = REMARKS['locals_ino'].format(user.country, num)
-            send_message = InlineKeyboardMarkup()
-            send_message.add(InlineKeyboardButton(
-                                    text='Написать им всем сообщение',
-                                    callback_data='callall'))
-            bot.send_message(message.chat.id,
-                             answer,
-                             reply_markup=send_message,
-                             parse_mode='Markdown')
-        else:
-            answer = (f'{user.name}, в вашем городе пока зарегистрированы '
-                      'только вы. Ждем пополнения.')
-            bot.send_message(message.chat.id, answer)
+        answer = REMARKS['locals_ino'].format(user.country, num)
+    send_message = InlineKeyboardMarkup()
+    send_message.add(InlineKeyboardButton(
+                            text='Написать им всем сообщение',
+                            callback_data='callall'))
+    bot.send_message(message.chat.id,
+                     answer,
+                     reply_markup=send_message,
+                     parse_mode='Markdown')
 
 
 @bot.message_handler(commands=['locations'])
@@ -159,19 +162,20 @@ def get_all_timezones(message):
 def location(message):
     """Обрабатывает геолокацию пользователя в случае отправки.
     """
-    if message.location is not None:
-        user = activate_user(message.chat.id)
-        country, city, timezone, utc_offset = coordinates_to_city(
-            message.location.latitude, message.location.longitude)
-        user.city = city
-        user.country = country
-        user.timezone = timezone
-        user.utc_offset = utc_offset
-        bot.send_message(
-            message.chat.id, 'Геолокация проведена.',
-            reply_markup=ReplyKeyboardRemove()
-        )
-        submit_user(message)
+    if not message.location:
+        return
+    user = activate_user(message.chat.id)
+    country, city, timezone, utc_offset = coordinates_to_city(
+        message.location.latitude, message.location.longitude)
+    user.city = city
+    user.country = country
+    user.timezone = timezone
+    user.utc_offset = utc_offset
+    bot.send_message(
+        message.chat.id, 'Геолокация проведена.',
+        reply_markup=ReplyKeyboardRemove()
+    )
+    submit_user(message)
 
 
 # Реакции на срабатывание инлайн-клавиатур бота
@@ -282,46 +286,47 @@ def send_all(message):
     """
     user = activate_user(message.chat.id)
     locals = user.get_locals()
-    if locals:
-        if user.country == 'Россия':
-            place = user.city
-        else:
-            place = user.country
-        send_message = InlineKeyboardMarkup()
-        send_message.add(InlineKeyboardButton(
-                            text='Ответить всем в чате земляков',
-                            callback_data='answerall'))
-        for loc in locals:
-            bot.send_message(
-                chat_id=loc,
-                text=f'_Ваш земляк_ *{user.name}* _пишет_:\n{message.text}',
-                reply_markup=send_message,
-                parse_mode='Markdown')
-        bot.send_message(
-            chat_id=message.chat.id,
-            text=(f'Сообщение отправлено. Получатели: *{len(locals)}* чел.\n'
-                  f'Локация: {place}'),
-            parse_mode='Markdown')
-    else:
+    if not locals:
         bot.send_message(
             chat_id=message.chat.id,
             text='Упс, что-то пошло не так. Не вижу ваших земляков.',
             )
+        return
+    if user.country == 'Россия':
+        place = user.city
+    else:
+        place = user.country
+    send_message = InlineKeyboardMarkup()
+    send_message.add(InlineKeyboardButton(
+                        text='Ответить всем в чате земляков',
+                        callback_data='answerall'))
+    for loc in locals:
+        bot.send_message(
+            chat_id=loc,
+            text=f'_Ваш земляк_ *{user.name}* _пишет_:\n{message.text}',
+            reply_markup=send_message,
+            parse_mode='Markdown')
+    bot.send_message(
+        chat_id=message.chat.id,
+        text=(f'Сообщение отправлено. Получатели: *{len(locals)}* чел.\n'
+              f'Локация: {place}'),
+        parse_mode='Markdown')
 
 
 def alert_all(user):
     """Информирует о появлении нового земляка.
     """
     locals = user.get_locals()
-    if locals:
-        for loc in locals:
-            bot.send_document(
-                chat_id=loc,
-                document=('CgACAgIAAxkDAAMJY-oV_47ABn3ZrCYpRDqxoexf'
-                          '3WMAApwiAALnolFLCGfyQJZf5HAuBA'),
-                caption=('Среди ваших земляков пополнение. Приветствуйте, '
-                         f'*{user.name}*. Теперь вас *{len(locals)+1}* чел.'),
-                parse_mode='Markdown')
+    if not locals:
+        return
+    for loc in locals:
+        bot.send_document(
+            chat_id=loc,
+            document=('CgACAgIAAxkDAAMJY-oV_47ABn3ZrCYpRDqxoexf'
+                      '3WMAApwiAALnolFLCGfyQJZf5HAuBA'),
+            caption=('Среди ваших земляков пополнение. Приветствуйте, '
+                     f'*{user.name}*. Теперь вас *{len(locals)+1}* чел.'),
+            parse_mode='Markdown')
 
 
 # Реакции на текстовые сообщения боту
@@ -331,44 +336,44 @@ def handle_text(message):
     города при регистрации, отправку сообщения землякам.
     """
     user = activate_user(message.chat.id)
-    if message.reply_to_message:
-        operation = message.reply_to_message.text
-        if operation.startswith('Впишите свое имя') and not user.record:
-            user.name = message.text[:20].title()
-            provide_geo = InlineKeyboardMarkup()
-            provide_geo.add(InlineKeyboardButton(
-                            text='Указать свой город',
-                            callback_data='geo'))
-            provide_geo.add(InlineKeyboardButton(
-                            text='Поделиться геолокацией',
-                            callback_data='location'))
-            bot.send_message(
-                message.chat.id,
-                REMARKS['geo'].format(user.name),
-                reply_markup=provide_geo,
-                parse_mode='Markdown'
-                )
-        if operation.startswith('Впишите свой город') and not user.record:
-            country, city, timezone, utc_offset = check_city(message.text)
-            if city:
-                user.city = city
-                user.country = country
-                user.timezone = timezone
-                user.utc_offset = utc_offset
-                submit_user(message)
-            else:
-                bot.send_message(
-                    message.chat.id,
-                    'Не получилось идентифицировать город, попробуйте снова.'
-                    )
-        if operation.startswith('Впишите свое сообщение'):
-            bot.delete_message(message.chat.id,
-                               message.reply_to_message.message_id)
-            send_all(message)
-    else:
+    if not message.reply_to_message:
         bot.send_message(
             message.chat.id,
             'Не понимаю, что вы хотите сказать. Воспользуйтесь ↙ Menu.')
+        return
+    operation = message.reply_to_message.text
+    if operation.startswith('Впишите свое имя') and not user.record:
+        user.name = message.text[:20].title()
+        provide_geo = InlineKeyboardMarkup()
+        provide_geo.add(InlineKeyboardButton(
+                        text='Указать свой город',
+                        callback_data='geo'))
+        provide_geo.add(InlineKeyboardButton(
+                        text='Поделиться геолокацией',
+                        callback_data='location'))
+        bot.send_message(
+            message.chat.id,
+            REMARKS['geo'].format(user.name),
+            reply_markup=provide_geo,
+            parse_mode='Markdown'
+            )
+    if operation.startswith('Впишите свой город') and not user.record:
+        country, city, timezone, utc_offset = check_city(message.text)
+        if city:
+            user.city = city
+            user.country = country
+            user.timezone = timezone
+            user.utc_offset = utc_offset
+            submit_user(message)
+        else:
+            bot.send_message(
+                message.chat.id,
+                'Не получилось идентифицировать город, попробуйте снова.'
+                )
+    if operation.startswith('Впишите свое сообщение'):
+        bot.delete_message(message.chat.id,
+                           message.reply_to_message.message_id)
+        send_all(message)
 
 
 # Загрузка бота, инициализация базы данных при старте
