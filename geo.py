@@ -58,3 +58,18 @@ def find_location(latitude, longitude):
     obj = TimezoneFinder()
     timezone = obj.timezone_at(lng=longitude, lat=latitude)
     return country, place, timezone
+
+
+def map_users(list_of_locations):
+    """Генерирует географическую карту расположения пользователей бота
+    через API Яндекс.Карт. Возвращает ссылку на карту, в которой каждая
+    геометка сопровождается числом проживающих там пользователей.
+    """
+    url = 'https://static-maps.yandex.ru/1.x/?lang=ru_RU&l=map&pt='
+    for city, num in list_of_locations:
+        geolocator = Nominatim(user_agent="test_bot")
+        geo_location = geolocator.geocode(city)
+        latitude = geo_location.latitude
+        longitude = geo_location.longitude
+        url += f'{longitude:.5f},{latitude:.5f},pm2rdl{num}~'
+    return url[:-1]

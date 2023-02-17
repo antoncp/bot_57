@@ -7,7 +7,7 @@ from telebot.types import (BotCommand, ForceReply, InlineKeyboardButton,
                            ReplyKeyboardMarkup, ReplyKeyboardRemove)
 
 from db import DataBase
-from geo import check_city, coordinates_to_city
+from geo import check_city, coordinates_to_city, map_users
 from texts import REMARKS
 from user import User, activate_user
 
@@ -120,6 +120,13 @@ def get_all_locations(message):
     bot.send_message(message.chat.id,
                      answer,
                      parse_mode='Markdown')
+    if num != User.num_of_users:
+        User.num_of_users = num
+        map_url = map_users(ru + ino)
+        User.map_url = map_url
+    else:
+        map_url = User.map_url
+    bot.send_photo(message.chat.id, map_url, caption='Наши студенты на карте')
 
 
 @bot.message_handler(commands=['timezones'])

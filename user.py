@@ -9,6 +9,8 @@ class User:
     о том, что данные пользователя, записаны в БД.
     """
     list_of_users = set()
+    map_url = None
+    num_of_users = 0
 
     def __init__(self, user_id, locals=None, name=None, city=None,
                  country=None, timezone=None, utc_offset=None, record=False):
