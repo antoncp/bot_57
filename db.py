@@ -12,8 +12,7 @@ class DataBase:
         self.user_id = user_id
 
     def create_database(self):
-        """Инициализирует базу данных.
-        """
+        """Инициализирует базу данных."""
         with self.connection:
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS users(
@@ -29,8 +28,7 @@ class DataBase:
         return True
 
     def create_user(self, name, city, country, timezone, utc_offset):
-        """Сохраняет информацию о пользователе.
-        """
+        """Сохраняет информацию о пользователе."""
         with self.connection:
             self.cursor.execute('''
                 INSERT INTO users (
@@ -39,8 +37,7 @@ class DataBase:
                 ''', (self.user_id, name, city, country, timezone, utc_offset))
 
     def load_user(self):
-        """Загружает информацию о сохраненном пользователе.
-        """
+        """Загружает информацию о сохраненном пользователе."""
         with self.connection:
             self.cursor.execute('''
                 SELECT name, city, country, timezone, utc_offset
@@ -50,8 +47,7 @@ class DataBase:
         return self.cursor.fetchone()
 
     def get_local_users(self, city):
-        """Получает список земляков пользователя из того же города.
-        """
+        """Получает список земляков пользователя из того же города."""
         with self.connection:
             self.cursor.execute('''
                 SELECT user_id
@@ -61,8 +57,7 @@ class DataBase:
         return [user[0] for user in self.cursor.fetchall()]
 
     def get_local_users_foreign(self, country):
-        """Получает список земляков пользователя из той же страны.
-        """
+        """Получает список земляков пользователя из той же страны."""
         with self.connection:
             self.cursor.execute('''
                 SELECT user_id
@@ -72,8 +67,7 @@ class DataBase:
         return [user[0] for user in self.cursor.fetchall()]
 
     def check_user_exist(self):
-        """Проверяет существование записи о пользователе с заданным ID в БД.
-        """
+        """Проверяет существование записи о пользователе с заданным ID в БД."""
         with self.connection:
             self.cursor.execute('''
             SELECT EXISTS
@@ -111,8 +105,7 @@ class DataBase:
         return self.cursor.fetchall()
 
     def get_timezones(self):
-        """Представляет информацию о часовых поясах всех пользователей.
-        """
+        """Представляет информацию о часовых поясах всех пользователей."""
         with self.connection:
             self.cursor.execute('''
             SELECT timezone, utc_offset, COUNT(user_id) AS people
@@ -123,6 +116,5 @@ class DataBase:
         return self.cursor.fetchall()
 
     def close(self):
-        """Закрывает соединение с базой данных.
-        """
+        """Закрывает соединение с базой данных."""
         self.connection.close()

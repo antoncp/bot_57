@@ -14,12 +14,11 @@ def check_city(city):
     geo_location = geolocator.geocode(city)
     if geo_location is None:
         return (False, False, False, False)
-    else:
-        latitude = geo_location.latitude
-        longitude = geo_location.longitude
-        country, place, timezone = find_location(latitude, longitude)
-        utc_offset = time_offset(timezone)
-        return country, place, timezone, utc_offset
+    latitude = geo_location.latitude
+    longitude = geo_location.longitude
+    country, place, timezone = find_location(latitude, longitude)
+    utc_offset = time_offset(timezone)
+    return country, place, timezone, utc_offset
 
 
 def coordinates_to_city(latitude, longitude):
@@ -41,18 +40,18 @@ def time_offset(timezone):
 
 
 def find_location(latitude, longitude):
-    """Предоставляет страну, город, часовой пояс для заданных координат.
-    """
+    """Предоставляет страну, город, часовой пояс для заданных координат."""
     geolocator = Nominatim(user_agent="test_bot")
     political_location = geolocator.reverse(
         f"{latitude},{longitude}", language='ru')
-    country = political_location.raw['address']['country']
-    if political_location.raw['address'].get('city') is not None:
-        place = political_location.raw['address'].get('city')
-    elif political_location.raw['address'].get('town') is not None:
-        place = political_location.raw['address'].get('town')
-    elif political_location.raw['address'].get('village') is not None:
-        place = political_location.raw['address'].get('village')
+    address = political_location.raw['address']
+    country = address['country']
+    if address.get('city') is not None:
+        place = address.get('city')
+    elif address.get('town') is not None:
+        place = address.get('town')
+    elif address.get('village') is not None:
+        place = address.get('village')
     else:
         place = "Ближайшее место не определено"
     obj = TimezoneFinder()
