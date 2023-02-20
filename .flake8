@@ -6,3 +6,5 @@ exclude =
     venv/,
     env/
 max-complexity = 10
+require-plugins =
+    flake8-return
