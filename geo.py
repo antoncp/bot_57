@@ -43,7 +43,8 @@ def find_location(latitude, longitude):
     """Предоставляет страну, город, часовой пояс для заданных координат."""
     geolocator = Nominatim(user_agent="test_bot")
     political_location = geolocator.reverse(
-        f"{latitude},{longitude}", language='ru')
+        f"{latitude},{longitude}", language='ru'
+    )
     address = political_location.raw['address']
     country = address['country']
     if address.get('city') is not None:
