@@ -13,8 +13,17 @@ class User:
     map_url = None
     num_of_users = 0
 
-    def __init__(self, user_id, locals=None, name=None, city=None,
-                 country=None, timezone=None, utc_offset=None, record=False):
+    def __init__(
+        self,
+        user_id,
+        locals=None,
+        name=None,
+        city=None,
+        country=None,
+        timezone=None,
+        utc_offset=None,
+        record=False,
+    ):
         self.id = user_id
         self.locals = locals
         self.name = name
@@ -34,8 +43,13 @@ class User:
     def load_from_db(self):
         """Загружает информацию о сохраненном пользователе из БД."""
         db = DataBase(self.id)
-        (self.name, self.city, self.country,
-         self.timezone, self.utc_offset) = db.load_user()
+        (
+            self.name,
+            self.city,
+            self.country,
+            self.timezone,
+            self.utc_offset,
+        ) = db.load_user()
         self.record = True
         db.close()
 
@@ -43,8 +57,13 @@ class User:
         """Сохраняет информацию о пользователе в БД."""
         db = DataBase(self.id)
         if not db.check_user_exist() and self.timezone:
-            db.create_user(self.name, self.city,
-                           self.country, self.timezone, self.utc_offset)
+            db.create_user(
+                self.name,
+                self.city,
+                self.country,
+                self.timezone,
+                self.utc_offset,
+            )
             db.close()
             self.record = True
             return True
@@ -73,7 +92,8 @@ def activate_user(user_id):
     """
     user = next(
         (obj for obj in globals()['User'].list_of_users if obj.id == user_id),
-        None)
+        None,
+    )
     if not user:
         user = User(user_id)
         db = DataBase(user_id)
