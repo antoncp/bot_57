@@ -23,6 +23,7 @@ class User:
         timezone=None,
         utc_offset=None,
         record=False,
+        timer=None,
     ):
         self.id = user_id
         self.locals = locals
@@ -32,6 +33,7 @@ class User:
         self.timezone = timezone
         self.utc_offset = utc_offset
         self.record = record
+        self.timer = timer
         User.list_of_users.add(self)
 
     def __str__(self):
@@ -51,6 +53,9 @@ class User:
             self.utc_offset,
         ) = db.load_user()
         self.record = True
+        active_timer = db.check_timer_exist()
+        if active_timer:
+            self.timer = active_timer[0]
         db.close()
 
     def save_user(self):

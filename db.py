@@ -14,18 +14,26 @@ class DataBase:
     def create_database(self):
         """Инициализирует базу данных."""
         with self.connection:
-            self.cursor.execute(
+            self.cursor.executescript(
                 '''
-                CREATE TABLE IF NOT EXISTS users(
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    name TEXT,
-                    city TEXT,
-                    country TEXT,
-                    timezone TEXT,
-                    utc_offset INTEGER
-                );
-                '''
+            CREATE TABLE IF NOT EXISTS users(
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER,
+                name TEXT,
+                city TEXT,
+                country TEXT,
+                timezone TEXT,
+                utc_offset INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS timers(
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER,
+                sprint INTEGER,
+                start TEXT,
+                end TEXT,
+                total TEXT
+            );
+            '''
             )
         return True
 
@@ -85,10 +93,10 @@ class DataBase:
         with self.connection:
             self.cursor.execute(
                 '''
-                SELECT EXISTS
-                (SELECT * FROM users
-                WHERE user_id = ?);
-                ''',
+            SELECT EXISTS
+            (SELECT * FROM users
+            WHERE user_id = ?);
+            ''',
                 (self.user_id,),
             )
         return self.cursor.fetchone()[0]
@@ -100,12 +108,12 @@ class DataBase:
         with self.connection:
             self.cursor.execute(
                 '''
-                SELECT city, COUNT(user_id) AS people
-                FROM users
-                WHERE country = 'Россия'
-                GROUP BY city
-                ORDER BY people DESC;
-                '''
+            SELECT city, COUNT(user_id) AS people
+            FROM users
+            WHERE country = 'Россия'
+            GROUP BY city
+            ORDER BY people DESC;
+            '''
             )
         return self.cursor.fetchall()
 
@@ -116,12 +124,12 @@ class DataBase:
         with self.connection:
             self.cursor.execute(
                 '''
-                SELECT country, COUNT(user_id) AS people
-                FROM users
-                WHERE country <> 'Россия'
-                GROUP BY country
-                ORDER BY people DESC;
-                '''
+            SELECT country, COUNT(user_id) AS people
+            FROM users
+            WHERE country <> 'Россия'
+            GROUP BY country
+            ORDER BY people DESC;
+            '''
             )
         return self.cursor.fetchall()
 
@@ -130,11 +138,109 @@ class DataBase:
         with self.connection:
             self.cursor.execute(
                 '''
-                SELECT timezone, utc_offset, COUNT(user_id) AS people
-                FROM users
-                GROUP BY timezone
-                ORDER BY people DESC;
+            SELECT timezone, utc_offset, COUNT(user_id) AS people
+            FROM users
+            GROUP BY timezone
+            ORDER BY people DESC;
+            '''
+            )
+        return self.cursor.fetchall()
+
+    def start_timer(self, sprint):
+        """Записывает время старта таймера учебы."""
+        with self.connection:
+            self.cursor.execute(
                 '''
+                INSERT INTO timers (user_id, sprint, start)
+                VALUES(?, ?, datetime('now'));
+                ''',
+                (self.user_id, sprint),
+            )
+
+    def end_timer(self):
+        """Записывает время остановки таймера учебы."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                UPDATE timers
+                SET end = datetime('now'),
+                    total = (strftime('%s','now')-strftime('%s',start))
+                WHERE user_id = ?
+                AND end IS NULL;
+                ''',
+                (self.user_id,),
+            )
+
+    def last_timer(self):
+        """Возвращает последнюю запись таймера для конкретного пользователя."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                SELECT MAX(id)
+                FROM timers
+                WHERE user_id = ?;
+                ''',
+                (self.user_id,),
+            )
+        return self.cursor.fetchone()
+
+    def last_timer_duration(self, id):
+        """Возвращает информацию о сессии таймера с определенным ID."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                SELECT sprint, start,
+                (total/3600) || ':' || strftime('%M:%S', total/86400.0)
+                FROM timers
+                WHERE id = ?;
+                ''',
+                (id,),
+            )
+        return self.cursor.fetchone()
+
+    def check_timer_exist(self):
+        """Проверяет наличие запущенного таймера у пользователя."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                SELECT start
+                FROM timers
+                WHERE user_id = ?
+                AND end IS NULL;
+                ''',
+                (self.user_id,),
+            )
+        return self.cursor.fetchone()
+
+    def sprint_time(self, sprint):
+        """Cуммирует время потраченное на определенный спринт."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                SELECT (SUM(total)/3600) || ':' ||
+                strftime('%M:%S', SUM(total)/86400.0)
+                FROM timers
+                WHERE sprint = ?
+                AND user_id = ?;
+                ''',
+                (sprint, self.user_id),
+            )
+        return self.cursor.fetchone()
+
+    def all_sprints(self):
+        """Статистика по времени, затраченному на прохождение спринтов."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+            SELECT sprint,
+            (SUM(total)/3600) || ':' ||
+            strftime('%M:%S', SUM(total)/86400.0) AS time
+            FROM timers
+            WHERE user_id = ?
+            GROUP BY sprint
+            ORDER BY time DESC;
+            ''',
+                (self.user_id,),
             )
         return self.cursor.fetchall()
 

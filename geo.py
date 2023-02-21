@@ -39,6 +39,18 @@ def time_offset(timezone):
     return int(utc_offset[:-2])
 
 
+def local_time(timezone, time=None):
+    """Конвертирует время UTC в локальное время пользователя с учетом его
+    часового пояса.
+    """
+    if not time:
+        time = dt.datetime.utcnow()
+    else:
+        time = dt.datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
+    local = time.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone(timezone))
+    return local.strftime('%H-%M')
+
+
 def find_location(latitude, longitude):
     """Предоставляет страну, город, часовой пояс для заданных координат."""
     geolocator = Nominatim(user_agent="test_bot")

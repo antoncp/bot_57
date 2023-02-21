@@ -13,7 +13,7 @@ from telebot.types import (
 )
 
 from db import DataBase
-from geo import check_city, coordinates_to_city, map_users
+from geo import check_city, coordinates_to_city, local_time, map_users
 from texts import REMARKS
 from user import User, activate_user
 
@@ -29,6 +29,7 @@ bot.set_my_commands(
         BotCommand("/message", "Написать всем землякам"),
         BotCommand("/locations", "Показать все города"),
         BotCommand("/timezones", "Часовые пояса"),
+        BotCommand("/timer", "Таймер учебы"),
     ]
 )
 
@@ -51,10 +52,8 @@ def new(message):
                 'CgACAgIAAxkDAAMMY-oXBpKk7qbSEbcUFo1VgM_N'
                 'ZwADniIAAueiUUsNLalUHu6Nly4E'
             ),
-            caption=(
-                f'{user.name} из {user.city}, {user.country}, вы уже есть'
-                ' в базе. Данные нельзя поменять.'
-            ),
+            caption=f'{user.name} из {user.city}, {user.country}, вы уже есть'
+            ' в базе. Данные нельзя поменять.',
         )
         return
 
@@ -155,7 +154,9 @@ def get_all_timezones(message):
     db.close()
     utc_shift = 3
     if time:
-        utc_shift = sum([i[1] * i[2] for i in time]) / sum(i[2] for i in time)
+        utc_shift = sum([i[1] * i[2] for i in time]) / sum(
+            [i[2] for i in time]
+        )
     moscow_shift = utc_shift - 3
     header = (
         '_Часовые пояса студентов когорты 57 в этом боте_\n'
@@ -167,8 +168,10 @@ def get_all_timezones(message):
     timezone_stats = 'Пока никого нет'
     if time:
         timezone_stats = '\n'.join(
-            f'*{zone}* _(UTC +{utc} ч.)_: `{people}`'
-            for zone, utc, people in time
+            [
+                f'*{zone}* _(UTC +{utc} ч.)_: `{people}`'
+                for zone, utc, people in time
+            ]
         )
     answer = header + timezone_stats
     bot.send_message(message.chat.id, answer, parse_mode='Markdown')
@@ -193,6 +196,57 @@ def location(message):
         reply_markup=ReplyKeyboardRemove(),
     )
     submit_user(message)
+
+
+@bot.message_handler(commands=['timer'])
+def timer(message):
+    """Позволяет выбрать текущий спринт для запуска таймера учета учебного
+    времени и выводит статистику по записанному времени.
+    """
+    user = activate_user(message.chat.id)
+    if not user.record:
+        answer = 'Сначала зарегистрируйтесь. Ваш город не определен.'
+        bot.send_message(message.chat.id, answer)
+        return
+    if user.timer:
+        bot.send_message(message.chat.id, 'У вас уже запущен таймер.')
+        return
+    sprint_select = InlineKeyboardMarkup(row_width=2)
+    sprint_select.add(
+        *[
+            InlineKeyboardButton(
+                text=f'Спринт № {spr}', callback_data=f'sprint {spr}'
+            )
+            for spr in range(3, 17)
+        ]
+    )
+    sprint_select.add(
+        InlineKeyboardButton(text='Спрятать таймер', callback_data='no_timer')
+    )
+    answer = REMARKS['timers']
+    db = DataBase(message.chat.id)
+    all_sprints = db.all_sprints()
+    header = (
+        '_Время, затраченное вами на прохождение спринтов_\n'
+        'Вы можете выбрать свой текущий спринт для учета времени ниже, '
+        'среди предложенных кнопок.\n\n'
+        '*Спринт*  *|*  *Затрачено времени*\n'
+        '----------------------------------------\n'
+    )
+    if all_sprints:
+        sprints = '\n'.join(
+            [
+                f'*Спринт №{spr}*: `{total_time}`'
+                for spr, total_time in all_sprints
+            ]
+        )
+        answer = header + sprints
+    bot.send_message(
+        message.chat.id,
+        answer,
+        parse_mode='Markdown',
+        reply_markup=sprint_select,
+    )
 
 
 # Реакции на срабатывание инлайн-клавиатур бота
@@ -277,6 +331,33 @@ def answer_all(call):
     bot.answer_callback_query(callback_query_id=call.id)
 
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith('sprint'))
+def show_timer(call):
+    """Показывает клавиатуру с кнопкой таймера для выбранного спринта."""
+    sprint_num = call.data.split()[-1]
+    timer = ReplyKeyboardMarkup(
+        row_width=1, resize_keyboard=True, one_time_keyboard=True
+    )
+    timer.add(f"Запустить таймер: cпринт № {sprint_num}")
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(
+        call.message.chat.id,
+        'Нажмите на кнопку таймера внизу, когда начнете учебу.',
+        reply_markup=timer,
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'no_timer')
+def hide_timer(call):
+    """Прячет клавиатуру запуска таймера"""
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(
+        call.message.chat.id,
+        'Таймер спрятан. Для активации снова выберите спринт',
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+
 # Вынесенные функции бота
 def submit_user(message):
     """Подтверждает первичное сохранение информации о пользователе в БД."""
@@ -355,6 +436,60 @@ def alert_all(user):
         )
 
 
+def new_timer(message):
+    """Инициирует запись о времени старта нового таймера учебы в БД."""
+    user = activate_user(message.chat.id)
+    if user.timer:
+        return
+    try:
+        sprint = int(message.text.split()[-1])
+    except ValueError:
+        return
+    if not 0 < sprint < 17:
+        return
+    db = DataBase(message.chat.id)
+    db.start_timer(sprint)
+    db.close()
+    time = local_time(user.timezone)
+    user.timer = True
+    answer = f'Таймер запущен в *{time}*'
+    stop_timer = ReplyKeyboardMarkup(
+        row_width=1, resize_keyboard=True, one_time_keyboard=True
+    )
+    stop_timer.add(f"Остановить таймер (запущен в {time})")
+    bot.send_message(
+        message.chat.id, answer, parse_mode='Markdown', reply_markup=stop_timer
+    )
+
+
+def end_timer(message):
+    """Останавливает запущенный таймер, записывая время окончания в БД."""
+    user = activate_user(message.chat.id)
+    if not user.timer:
+        bot.send_message(
+            message.chat.id,
+            'У вас нет запущенных таймеров.',
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+    db = DataBase(message.chat.id)
+    db.end_timer()
+    id = db.last_timer()[0]
+    sprint, start, duration = db.last_timer_duration(id)
+    sprint_time = db.sprint_time(sprint)[0]
+    db.close()
+    user.timer = None
+    start = local_time(user.timezone, start)
+    answer = REMARKS['timer_stop'].format(start, duration, sprint, sprint_time)
+    timer = ReplyKeyboardMarkup(
+        row_width=1, resize_keyboard=True, one_time_keyboard=True
+    )
+    timer.add(f"Запустить таймер: cпринт № {sprint}")
+    bot.send_message(
+        message.chat.id, answer, parse_mode='Markdown', reply_markup=timer
+    )
+
+
 # Реакции на текстовые сообщения боту
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
@@ -363,10 +498,15 @@ def handle_text(message):
     """
     user = activate_user(message.chat.id)
     if not message.reply_to_message:
-        bot.send_message(
-            message.chat.id,
-            'Не понимаю, что вы хотите сказать. Воспользуйтесь ↙ Menu.',
-        )
+        if message.text.startswith('Запустить таймер: cпринт №'):
+            new_timer(message)
+        elif message.text.startswith('Остановить таймер'):
+            end_timer(message)
+        else:
+            bot.send_message(
+                message.chat.id,
+                'Не понимаю, что вы хотите сказать. Воспользуйтесь ↙ Menu.',
+            )
         return
     operation = message.reply_to_message.text
     if operation.startswith('Впишите свое имя') and not user.record:
