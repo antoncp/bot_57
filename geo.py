@@ -51,6 +51,18 @@ def local_time(timezone, time=None):
     return local.strftime('%H-%M')
 
 
+def timer_alert(time):
+    """Проверяет запущенные таймеры на превышение времени."""
+    time_now = dt.datetime.utcnow()
+    time_start = dt.datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
+    time_dif = time_now - time_start
+    if time_dif.total_seconds() > 28800:
+        return 'close'
+    if time_dif.total_seconds() > 60 and time_dif.total_seconds() % 3600 <= 59:
+        return 'alert'
+    return False
+
+
 def find_location(latitude, longitude):
     """Предоставляет страну, город, часовой пояс для заданных координат."""
     geolocator = Nominatim(user_agent="test_bot")

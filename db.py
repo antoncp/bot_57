@@ -212,6 +212,18 @@ class DataBase:
             )
         return self.cursor.fetchone()
 
+    def check_all_active_timers(self):
+        """Проверяет наличие всех запущенных таймеров."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                SELECT user_id, start
+                FROM timers
+                WHERE end IS NULL;
+                '''
+            )
+        return self.cursor.fetchall()
+
     def sprint_time(self, sprint):
         """Cуммирует время потраченное на определенный спринт."""
         with self.connection:

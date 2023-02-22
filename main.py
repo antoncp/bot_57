@@ -1,4 +1,5 @@
 import os
+from threading import Timer
 
 import telebot
 from dotenv import load_dotenv
@@ -13,7 +14,13 @@ from telebot.types import (
 )
 
 from db import DataBase
-from geo import check_city, coordinates_to_city, local_time, map_users
+from geo import (
+    check_city,
+    coordinates_to_city,
+    local_time,
+    map_users,
+    timer_alert,
+)
 from texts import REMARKS
 from user import User, activate_user
 
@@ -226,6 +233,7 @@ def timer(message):
     answer = REMARKS['timers']
     db = DataBase(message.chat.id)
     all_sprints = db.all_sprints()
+    db.close()
     header = (
         '_Время, затраченное вами на прохождение спринтов_\n'
         'Вы можете выбрать свой текущий спринт для учета времени ниже, '
@@ -236,7 +244,7 @@ def timer(message):
     if all_sprints:
         sprints = '\n'.join(
             [
-                f'*Спринт №{spr}*: `{total_time}`'
+                f'*Спринт №{spr}*:  `{total_time}`'
                 for spr, total_time in all_sprints
             ]
         )
@@ -334,6 +342,9 @@ def answer_all(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('sprint'))
 def show_timer(call):
     """Показывает клавиатуру с кнопкой таймера для выбранного спринта."""
+    user = activate_user(call.message.chat.id)
+    if user.timer:
+        return
     sprint_num = call.data.split()[-1]
     timer = ReplyKeyboardMarkup(
         row_width=1, resize_keyboard=True, one_time_keyboard=True
@@ -350,6 +361,9 @@ def show_timer(call):
 @bot.callback_query_handler(func=lambda call: call.data == 'no_timer')
 def hide_timer(call):
     """Прячет клавиатуру запуска таймера"""
+    user = activate_user(call.message.chat.id)
+    if user.timer:
+        return
     bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_message(
         call.message.chat.id,
@@ -462,17 +476,17 @@ def new_timer(message):
     )
 
 
-def end_timer(message):
+def end_timer(user_id, forcibly=False):
     """Останавливает запущенный таймер, записывая время окончания в БД."""
-    user = activate_user(message.chat.id)
+    user = activate_user(user_id)
     if not user.timer:
         bot.send_message(
-            message.chat.id,
+            user_id,
             'У вас нет запущенных таймеров.',
             reply_markup=ReplyKeyboardRemove(),
         )
         return
-    db = DataBase(message.chat.id)
+    db = DataBase(user_id)
     db.end_timer()
     id = db.last_timer()[0]
     sprint, start, duration = db.last_timer_duration(id)
@@ -481,13 +495,46 @@ def end_timer(message):
     user.timer = None
     start = local_time(user.timezone, start)
     answer = REMARKS['timer_stop'].format(start, duration, sprint, sprint_time)
+    if forcibly:
+        header = (
+            '*Вы занимаетесь больше 8 часов. Так долго учиться нельзя.* '
+            '*Ваш таймер принудительно остановлен.*\n\n'
+        )
+        answer = header + answer
     timer = ReplyKeyboardMarkup(
         row_width=1, resize_keyboard=True, one_time_keyboard=True
     )
     timer.add(f"Запустить таймер: cпринт № {sprint}")
     bot.send_message(
-        message.chat.id, answer, parse_mode='Markdown', reply_markup=timer
+        user_id, answer, parse_mode='Markdown', reply_markup=timer
     )
+
+
+def monitoring():
+    """Раз в минуту проверяет БД на предмет запущенных таймеров. Если
+    пользователь занимается больше часа - высылает предупреждение об отдыхе.
+    Если больше 8 часов - принудительно закрывает таймер.
+    """
+    one_minute_monitor = Timer(60.0, monitoring)
+    one_minute_monitor.start()
+    db = DataBase()
+    active_timers = db.check_all_active_timers()
+    db.close()
+    if active_timers:
+        for user_id, start_time in active_timers:
+            status = timer_alert(start_time)
+            if not status:
+                break
+            if status == 'alert':
+                user = activate_user(user_id)
+                start = local_time(user.timezone, start_time)
+                bot.send_message(
+                    user_id,
+                    REMARKS['timer_alert'].format(start),
+                    parse_mode='Markdown',
+                )
+            if status == 'close':
+                end_timer(user_id, forcibly=True)
 
 
 # Реакции на текстовые сообщения боту
@@ -501,7 +548,7 @@ def handle_text(message):
         if message.text.startswith('Запустить таймер: cпринт №'):
             new_timer(message)
         elif message.text.startswith('Остановить таймер'):
-            end_timer(message)
+            end_timer(message.chat.id)
         else:
             bot.send_message(
                 message.chat.id,
@@ -553,4 +600,5 @@ if __name__ == '__main__':
     db = DataBase()
     db.create_database()
     db.close()
+    monitoring()
     bot.polling(none_stop=True, interval=0)
