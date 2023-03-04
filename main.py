@@ -1,3 +1,4 @@
+import logging
 import os
 from threading import Timer
 
@@ -13,6 +14,7 @@ from telebot.types import (
     ReplyKeyboardRemove,
 )
 
+from config import log
 from db import DataBase
 from geo import (
     check_city,
@@ -151,6 +153,7 @@ def get_all_locations(message):
     else:
         map_url = User.map_url
     bot.send_photo(message.chat.id, map_url, caption='Наши студенты на карте')
+    logging.warning(log(message, 'Запрос карты пользователей'))
 
 
 @bot.message_handler(commands=['timezones'])
@@ -182,6 +185,7 @@ def get_all_timezones(message):
         )
     answer = header + timezone_stats
     bot.send_message(message.chat.id, answer, parse_mode='Markdown')
+    logging.warning(log(message, 'Запрос часовых поясов пользователей'))
 
 
 @bot.message_handler(content_types=['location'])
@@ -316,6 +320,7 @@ def save_user(call):
             caption='Данные сохранены. Поздравляем!',
         )
         alert_all(user)
+        logging.warning(log(message, 'Регистрация нового пользователя'))
     else:
         bot.send_message(call.message.chat.id, 'Ошибка записи')
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -428,6 +433,7 @@ def send_all(message):
         ),
         parse_mode='Markdown',
     )
+    logging.warning(log(message, f'Написал землякам {place}: {message.text}'))
 
 
 def alert_all(user):
@@ -601,4 +607,4 @@ if __name__ == '__main__':
     db.create_database()
     db.close()
     monitoring()
-    bot.polling(none_stop=True, interval=0)
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
