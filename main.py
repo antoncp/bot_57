@@ -1,4 +1,3 @@
-import logging
 import os
 from threading import Timer
 
@@ -14,7 +13,7 @@ from telebot.types import (
     ReplyKeyboardRemove,
 )
 
-from config import log
+from config import log, logger
 from db import DataBase
 from geo import (
     check_city,
@@ -148,12 +147,17 @@ def get_all_locations(message):
     bot.send_message(message.chat.id, answer, parse_mode='Markdown')
     if num != User.num_of_users:
         User.num_of_users = num
-        map_url = map_users(ru + ino)
+        map_url, map_europe_url = map_users(ru + ino)
         User.map_url = map_url
+        User.map_europe_url = map_europe_url
     else:
         map_url = User.map_url
-    bot.send_photo(message.chat.id, map_url, caption='Наши студенты на карте')
-    logging.warning(log(message, 'Запрос карты пользователей'))
+        map_europe_url = User.map_europe_url
+    bot.send_photo(
+        message.chat.id, map_url, caption='Наши студенты на карте мира'
+    )
+    bot.send_photo(message.chat.id, map_europe_url, caption='Крупный план')
+    logger.warning(log(message, 'Запрос карты пользователей'))
 
 
 @bot.message_handler(commands=['timezones'])
@@ -185,7 +189,7 @@ def get_all_timezones(message):
         )
     answer = header + timezone_stats
     bot.send_message(message.chat.id, answer, parse_mode='Markdown')
-    logging.warning(log(message, 'Запрос часовых поясов пользователей'))
+    logger.warning(log(message, 'Запрос часовых поясов пользователей'))
 
 
 @bot.message_handler(content_types=['location'])
@@ -320,7 +324,7 @@ def save_user(call):
             caption='Данные сохранены. Поздравляем!',
         )
         alert_all(user)
-        logging.warning(log(message, 'Регистрация нового пользователя'))
+        logger.warning(log(call.message, 'Регистрация нового пользователя'))
     else:
         bot.send_message(call.message.chat.id, 'Ошибка записи')
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -433,7 +437,7 @@ def send_all(message):
         ),
         parse_mode='Markdown',
     )
-    logging.warning(log(message, f'Написал землякам {place}: {message.text}'))
+    logger.warning(log(message, f'Написал землякам {place}: {message.text}'))
 
 
 def alert_all(user):

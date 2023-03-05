@@ -11,6 +11,7 @@ class User:
 
     list_of_users = set()
     map_url = None
+    map_europe_url = None
     num_of_users = 0
 
     def __init__(

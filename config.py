@@ -2,12 +2,25 @@ import logging
 
 # Конфигурация логов
 logging.basicConfig(
-    level=logging.WARNING,
-    filename="db/mylog.log",
+    level=logging.ERROR,
+    filename="db/errors.log",
     format="%(asctime)s %(levelname)s - %(module)s:%(lineno)d"
     " (%(funcName)s) - %(message)s",
     datefmt='%d-%b-%Y %H:%M:%S',
 )
+
+formatter = logging.Formatter(
+    "%(asctime)s %(levelname)s - %(module)s:%(lineno)d"
+    " (%(funcName)s) - %(message)s",
+    datefmt='%d-%b-%Y %H:%M:%S',
+)
+
+# Отдельный кастомный логгер в файл logs.log для пользовательских событий
+logger = logging.getLogger('Warning_logger')
+warning_handler = logging.FileHandler('db/logs.log')
+logger.setLevel(logging.WARNING)
+logger.addHandler(warning_handler)
+warning_handler.setFormatter(formatter)
 
 
 def log(message, script):

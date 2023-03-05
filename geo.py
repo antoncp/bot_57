@@ -87,13 +87,20 @@ def find_location(latitude, longitude):
 def map_users(list_of_locations):
     """Генерирует географическую карту расположения пользователей бота
     через API Яндекс.Карт. Возвращает ссылку на карту, в которой каждая
-    геометка сопровождается числом проживающих там пользователей.
+    геометка сопровождается числом проживающих там пользователей. Всего
+    возвращает две карты - мировую и европейской части РФ.
     """
     url = 'https://static-maps.yandex.ru/1.x/?lang=ru_RU&l=map&pt='
+    url_eu = (
+        'https://static-maps.yandex.ru/1.x/?lang=ru_RU&l=map'
+        '&bbox=27.9,44.5~62.8,62.5&&pt='
+    )
     for city, num in list_of_locations:
-        geolocator = Nominatim(user_agent="test_bot")
+        geolocator = Nominatim(user_agent="test_map_bot")
         geo_location = geolocator.geocode(city)
         latitude = geo_location.latitude
         longitude = geo_location.longitude
         url += f'{longitude:.5f},{latitude:.5f},pm2rdl{num}~'
-    return url[:-1]
+        if 45 < latitude < 62 and 28 < longitude < 62:
+            url_eu += f'{longitude:.5f},{latitude:.5f},pm2rdl{num}~'
+    return url[:-1], url_eu[:-1]
