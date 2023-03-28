@@ -132,3 +132,4 @@ dmypy.json
 # IDE settings
 .vscode/
 .idea/
+test.py

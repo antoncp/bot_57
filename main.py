@@ -13,6 +13,7 @@ from telebot.types import (
     ReplyKeyboardRemove,
 )
 
+import review
 from config import log, logger
 from db import DataBase
 from geo import (
@@ -27,6 +28,8 @@ from user import User, activate_user
 
 load_dotenv()
 TEL_TOKEN = os.environ.get('TEL_TOKEN')
+ENCRYPT_KEY = os.environ.get('ENCRYPT_KEY')
+ADMIN_ID = os.environ.get('ADMIN_ID')
 bot = telebot.TeleBot(TEL_TOKEN)
 
 
@@ -38,6 +41,7 @@ bot.set_my_commands(
         BotCommand("/locations", "Показать все города"),
         BotCommand("/timezones", "Часовые пояса"),
         BotCommand("/timer", "Таймер учебы"),
+        BotCommand("/review", "Мониторинг код-ревью"),
     ]
 )
 
@@ -265,6 +269,53 @@ def timer(message):
     )
 
 
+@bot.message_handler(commands=['review'])
+def review_check(message):
+    """Проверяет последний статус код-ревью. Запускает мониторинг статусов."""
+    user = activate_user(message.chat.id)
+    if not user.record:
+        answer = 'Сначала укажите ваш город. Город не определен.'
+        bot.send_message(message.chat.id, answer)
+        return
+
+    db = DataBase(message.chat.id)
+    credentials = db.token_exist()
+    db.close()
+    if credentials:
+        monitor = InlineKeyboardMarkup()
+        if not credentials[0]:
+            answer = 'Мониторинг код-ревью статусов сейчас отключен.'
+            monitor.add(
+                InlineKeyboardButton(
+                    text='Включить мониторинг', callback_data='monitor_on'
+                )
+            )
+        else:
+            db = DataBase(message.chat.id)
+            api_answer = review.get_api_answer(
+                review.decrypt(credentials[1]), 0
+            )
+            name, verdict, comment = review.parse_status(api_answer)
+            answer = REMARKS['token'].format(name, verdict, comment)
+            monitor.add(
+                InlineKeyboardButton(
+                    text='Отключить мониторинг', callback_data='monitor_off'
+                )
+            )
+        bot.send_message(
+            message.chat.id,
+            answer,
+            reply_markup=monitor,
+            parse_mode='Markdown',
+        )
+        return
+
+    reply = ForceReply(input_field_placeholder='Мой токен...')
+    bot.send_message(
+        message.chat.id, REMARKS['token_start'], reply_markup=reply
+    )
+
+
 # Реакции на срабатывание инлайн-клавиатур бота
 @bot.callback_query_handler(func=lambda call: call.data == 'name')
 def provide_name(call):
@@ -324,7 +375,12 @@ def save_user(call):
             caption='Данные сохранены. Поздравляем!',
         )
         alert_all(user)
-        logger.warning(log(call.message, 'Регистрация нового пользователя'))
+        logger.warning(
+            log(
+                call.message,
+                f'Новый пользователь: {user.city}, {user.country}',
+            )
+        )
     else:
         bot.send_message(call.message.chat.id, 'Ошибка записи')
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -369,16 +425,40 @@ def show_timer(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'no_timer')
 def hide_timer(call):
-    """Прячет клавиатуру запуска таймера"""
+    """Прячет клавиатуру запуска таймера."""
     user = activate_user(call.message.chat.id)
     if user.timer:
         return
     bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_message(
         call.message.chat.id,
-        'Таймер спрятан. Для активации снова выберите спринт',
+        'Таймер спрятан. Для активации снова выберите спринт.',
         reply_markup=ReplyKeyboardRemove(),
     )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'monitor_on')
+def monitor_on(call):
+    """Реактивирует ранее отключенный мониторинг код-ревью."""
+    db = DataBase(call.message.chat.id)
+    credentials = db.token_exist()
+    api_answer = review.get_api_answer(review.decrypt(credentials[1]), 0)
+    db.token_time_update(api_answer.get('current_date'))
+    db.close()
+    message = 'Мониторинг активирован. Бот будет следить за обновлениями.'
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, message)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'monitor_off')
+def monitor_off(call):
+    """Приостанавливает активный мониторинг код-ревью."""
+    db = DataBase(call.message.chat.id)
+    db.token_time_update(None)
+    db.close()
+    message = 'Мониторинг деактивирован'
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, message)
 
 
 # Вынесенные функции бота
@@ -520,6 +600,36 @@ def end_timer(user_id, forcibly=False):
     )
 
 
+def new_token(message):
+    """Записывает новый токен Яндекс-Практикума в БД для мониторинга
+    код-ревью статусов.
+    """
+    if not message.text.isascii():
+        bot.send_message(
+            message.chat.id,
+            'Это не токен \N{smirking face}. Попробуйте еще раз.',
+        )
+        return
+
+    api_answer = review.get_api_answer(message.text, 0)
+    answer = 'Ваш токен не распознан API. Попробуйте еще раз.'
+    if review.check_response(api_answer):
+        db = DataBase(message.chat.id)
+        answer = 'Ваш токен уже занесен в базу'
+        name, verdict, comment = review.parse_status(api_answer)
+        if not comment:
+            comment = 'отсутствует'
+        if not db.token_exist():
+            db.token_record(review.encrypt(message.text))
+            answer = REMARKS['token'].format(name, verdict, comment)
+        db.close()
+    bot.send_message(
+        message.chat.id,
+        answer,
+        parse_mode='Markdown',
+    )
+
+
 def monitoring():
     """Раз в минуту проверяет БД на предмет запущенных таймеров. Если
     пользователь занимается больше часа - высылает предупреждение об отдыхе.
@@ -534,7 +644,7 @@ def monitoring():
         for user_id, start_time in active_timers:
             status = timer_alert(start_time)
             if not status:
-                break
+                continue
             if status == 'alert':
                 user = activate_user(user_id)
                 start = local_time(user.timezone, start_time)
@@ -547,24 +657,67 @@ def monitoring():
                 end_timer(user_id, forcibly=True)
 
 
+def monitoring_api():
+    """Раз в три минуты обращается к API Яндекс Практикума за статусом работ,
+    отправленных на код-ревью. Делает это для всех сохраненных в БД токенов.
+    В случае обновления статуса - сообщает об этом и записывает время
+    последнего обновления в БД.
+    """
+    three_minute_monitor = Timer(180.0, monitoring_api)
+    three_minute_monitor.start()
+    db = DataBase()
+    active_tokens = db.all_active_tokens()
+    db.close()
+    if active_tokens:
+        for user_id, time, key in active_tokens:
+            api_answer = review.get_api_answer(review.decrypt(key), time)
+            if not api_answer['homeworks']:
+                continue
+            name, verdict, comment = review.parse_status(api_answer)
+            answer = REMARKS['token_update'].format(name, verdict, comment)
+            db = DataBase(user_id)
+            db.token_time_update(api_answer.get('current_date'))
+            db.close()
+            bot.send_message(
+                user_id,
+                answer,
+                parse_mode='Markdown',
+            )
+
+
 # Реакции на текстовые сообщения боту
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
-    """Обрабатывает все текстовые сообщения боту, в том числе заполнение имени,
-    города при регистрации, отправку сообщения землякам.
+    """Обрабатывает все текстовые сообщения боту, перенаправляет заполнение
+    имени, города при регистрации, отправку сообщения землякам.
     """
-    user = activate_user(message.chat.id)
     if not message.reply_to_message:
         if message.text.startswith('Запустить таймер: cпринт №'):
             new_timer(message)
         elif message.text.startswith('Остановить таймер'):
             end_timer(message.chat.id)
+        elif message.text.lower() == 'лог':
+            if message.chat.id == int(ADMIN_ID):
+                with open("db/logs.log") as log_file:
+                    bot.send_document(message.chat.id, log_file)
+        elif message.text.lower() == 'ошибки':
+            if message.chat.id == int(ADMIN_ID):
+                with open("db/errors.log") as log_file:
+                    bot.send_document(message.chat.id, log_file)
         else:
             bot.send_message(
                 message.chat.id,
                 'Не понимаю, что вы хотите сказать. Воспользуйтесь ↙ Menu.',
             )
         return
+    handle_force_answers(message)
+
+
+def handle_force_answers(message):
+    """Обрабатывает ответы на обязательные вопросы от бота, такие как
+    первичное заполнение анкетных данных.
+    """
+    user = activate_user(message.chat.id)
     operation = message.reply_to_message.text
     if operation.startswith('Впишите свое имя') and not user.record:
         user.name = message.text[:20].title()
@@ -603,6 +756,8 @@ def handle_text(message):
             message.chat.id, message.reply_to_message.message_id
         )
         send_all(message)
+    if operation.startswith('Для старта мониторинга'):
+        new_token(message)
 
 
 # Загрузка бота, инициализация базы данных при старте
@@ -611,4 +766,5 @@ if __name__ == '__main__':
     db.create_database()
     db.close()
     monitoring()
+    monitoring_api()
     bot.infinity_polling(timeout=10, long_polling_timeout=5)

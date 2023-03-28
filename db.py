@@ -33,6 +33,12 @@ class DataBase:
                 end TEXT,
                 total TEXT
             );
+            CREATE TABLE IF NOT EXISTS reviews(
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER,
+                time TEXT,
+                key TEXT
+            );
             '''
             )
         return True
@@ -253,6 +259,54 @@ class DataBase:
             ORDER BY time DESC;
             ''',
                 (self.user_id,),
+            )
+        return self.cursor.fetchall()
+
+    def token_record(self, token):
+        """Записывает первичный токен к API Яндекс Практикума."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                INSERT INTO reviews (user_id, time, key)
+                VALUES(?, strftime('%s','now'), ?);
+                ''',
+                (self.user_id, token),
+            )
+
+    def token_time_update(self, time):
+        """Обновляет временную метку последнего обращения к API."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                UPDATE reviews
+                SET time = ?
+                WHERE user_id = ?;
+                ''',
+                (time, self.user_id),
+            )
+
+    def token_exist(self):
+        """Проверяет наличие токена API, извлекает ключ и временную метку."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                SELECT time, key
+                FROM reviews
+                WHERE user_id = ?;
+                ''',
+                (self.user_id,),
+            )
+        return self.cursor.fetchone()
+
+    def all_active_tokens(self):
+        """Выводит все активные токены API Яндекс Практикума."""
+        with self.connection:
+            self.cursor.execute(
+                '''
+                SELECT user_id, time, key
+                FROM reviews
+                WHERE time IS NOT NULL;
+                '''
             )
         return self.cursor.fetchall()
 
