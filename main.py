@@ -1,3 +1,4 @@
+import asyncio
 import os
 from threading import Timer
 
@@ -308,6 +309,7 @@ def review_check(message):
             reply_markup=monitor,
             parse_mode='Markdown',
         )
+        logger.warning(log(message, f'Мониторинг код-ревью: {answer}'))
         return
 
     reply = ForceReply(input_field_placeholder='Мой токен...')
@@ -628,6 +630,7 @@ def new_token(message):
         answer,
         parse_mode='Markdown',
     )
+    logger.warning(log(message, f'Зарегистрировал токен: {answer}'))
 
 
 def monitoring():
@@ -669,8 +672,10 @@ def monitoring_api():
     active_tokens = db.all_active_tokens()
     db.close()
     if active_tokens:
-        for user_id, time, key in active_tokens:
-            api_answer = review.get_api_answer(review.decrypt(key), time)
+        line = [(review.decrypt(key), time) for id, time, key in active_tokens]
+        api_answers = asyncio.run(review.get_multiple_api(line))
+        alert_list = zip(list(zip(*active_tokens))[0], api_answers)
+        for user_id, api_answer in alert_list:
             if not api_answer['homeworks']:
                 continue
             name, verdict, comment = review.parse_status(api_answer)
@@ -683,6 +688,7 @@ def monitoring_api():
                 answer,
                 parse_mode='Markdown',
             )
+            logger.warning(f'Обновление код-ревью мониторинга: {answer}')
 
 
 # Реакции на текстовые сообщения боту

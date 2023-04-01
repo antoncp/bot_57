@@ -133,3 +133,4 @@ dmypy.json
 .vscode/
 .idea/
 test.py
+requests.http
