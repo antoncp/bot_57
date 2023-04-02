@@ -256,7 +256,7 @@ class DataBase:
             FROM timers
             WHERE user_id = ?
             GROUP BY sprint
-            ORDER BY time DESC;
+            ORDER BY SUM(total) DESC;
             ''',
                 (self.user_id,),
             )
