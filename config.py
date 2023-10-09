@@ -1,9 +1,12 @@
 import logging
+from logging.handlers import RotatingFileHandler
 
 # Конфигурация логов
 logging.basicConfig(
     level=logging.ERROR,
-    filename="db/errors.log",
+    handlers=[
+        RotatingFileHandler('db/bot57.log', maxBytes=5000000, backupCount=10)
+    ],
     format="%(asctime)s %(levelname)s - %(module)s:%(lineno)d"
     " (%(funcName)s) - %(message)s",
     datefmt='%d-%b-%Y %H:%M:%S',
